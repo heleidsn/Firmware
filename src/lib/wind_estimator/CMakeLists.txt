@@ -32,7 +32,6 @@
 ############################################################################
 px4_add_module(
 	MODULE lib__wind_estimator
-	STACK_MAIN 1024
 	COMPILE_FLAGS
 	SRCS
 		WindEstimator.cpp
