@@ -501,7 +501,7 @@ VtolAttitudeControl::parameters_update()
 	param_get(_params_handles.back_trans_throttle, &_params.back_trans_throttle);
 	param_get(_params_handles.airspeed_blend, &_params.airspeed_blend);
 	param_get(_params_handles.airspeed_mode, &l);
-	_params.airspeed_disabled = l != 0;
+    _params.airspeed_disabled = (l == 0);
 	param_get(_params_handles.front_trans_timeout, &_params.front_trans_timeout);
 	param_get(_params_handles.mpc_xy_cruise, &_params.mpc_xy_cruise);
 

@@ -156,7 +156,10 @@ void Tiltrotor::update_vtol_state()
 			break;
 
 		case TRANSITION_BACK:
-			if (_tilt_control <= _params_tiltrotor.tilt_mc) {
+            // 如果时间到达后向转换时间 进入MC模式
+            float time_since_trans_start = (float)(hrt_absolute_time() - _vtol_schedule.transition_start) * 1e-6f;
+            if (time_since_trans_start >= _params->back_trans_duration)
+            {
 				_vtol_schedule.flight_mode = MC_MODE;
 			}
 
@@ -182,14 +185,10 @@ void Tiltrotor::update_vtol_state()
 				float time_since_trans_start = (float)(hrt_absolute_time() - _vtol_schedule.transition_start) * 1e-6f;
 
 				// check if we have reached airspeed to switch to fw mode
+                // P2进入条件为 时间达到最小P1时间 或 速度达到转换空速（10m/s）
 				transition_to_p2 |= !_params->airspeed_disabled &&
-						    _airspeed->indicated_airspeed_m_s >= _params->transition_airspeed &&
+                            _airspeed->indicated_airspeed_m_s >= _params->transition_airspeed ||
 						    time_since_trans_start > _params->front_trans_time_min;
-
-				// check if airspeed is invalid and transition by time
-				transition_to_p2 |= _params->airspeed_disabled &&
-						    _tilt_control > _params_tiltrotor.tilt_transition &&
-						    time_since_trans_start > _params->front_trans_time_openloop;
 
 				if (transition_to_p2) {
 					_vtol_schedule.flight_mode = TRANSITION_FRONT_P2;
@@ -292,16 +291,13 @@ void Tiltrotor::update_transition_state()
 			set_rear_motor_state(ENABLED);
 		}
 
-		// tilt rotors forward up to certain angle
-		if (_tilt_control <= _params_tiltrotor.tilt_transition) {
-			_tilt_control = _params_tiltrotor.tilt_mc +
-					fabsf(_params_tiltrotor.tilt_transition - _params_tiltrotor.tilt_mc) * time_since_trans_start /
-					_params->front_trans_duration;
-		}
+        //P1直接开始倾转  tilt_control 直接赋值到转换值
+        _tilt_control = _params_tiltrotor.tilt_transition;
 
 
 		// at low speeds give full weight to MC
 		_mc_roll_weight = 1.0f;
+        _mc_pitch_weight = 1.0f;
 		_mc_yaw_weight = 1.0f;
 
 		// reduce MC controls once the plane has picked up speed
@@ -309,37 +305,37 @@ void Tiltrotor::update_transition_state()
 			_mc_yaw_weight = 0.0f;
 		}
 
+        // 速度大于混合空速时开始降旋翼权重
 		if (!_params->airspeed_disabled && _airspeed->indicated_airspeed_m_s >= _params->airspeed_blend) {
 			_mc_roll_weight = 1.0f - (_airspeed->indicated_airspeed_m_s - _params->airspeed_blend) /
 					  (_params->transition_airspeed - _params->airspeed_blend);
-		}
-
-		// without airspeed do timed weight changes
-		if (_params->airspeed_disabled
-		    && time_since_trans_start > _params->front_trans_time_min) {
-			_mc_roll_weight = 1.0f - (time_since_trans_start - _params->front_trans_time_min) /
-					  (_params->front_trans_time_openloop - _params->front_trans_time_min);
-			_mc_yaw_weight = _mc_roll_weight;
+            _mc_pitch_weight = _mc_roll_weight;
 		}
 
 		_thrust_transition = _mc_virtual_att_sp->thrust;
 
 	} else if (_vtol_schedule.flight_mode == TRANSITION_FRONT_P2) {
 		// the plane is ready to go into fixed wing mode, tilt the rotors forward completely
+
+        // 用于保障P2阶段时间
 		_tilt_control = _params_tiltrotor.tilt_transition +
 				fabsf(_params_tiltrotor.tilt_fw - _params_tiltrotor.tilt_transition) * time_since_trans_start /
 				_params_tiltrotor.front_trans_dur_p2;
 
+
 		_mc_roll_weight = 0.0f;
+        _mc_pitch_weight = 0.0f;
 		_mc_yaw_weight = 0.0f;
 
 		// ramp down rear motors (setting MAX_PWM down scales the given output into the new range)
+        // 尾电机输出最大值从1500开始下降
 		int rear_value = (1.0f - time_since_trans_start / _params_tiltrotor.front_trans_dur_p2) *
-				 (PWM_DEFAULT_MAX - PWM_DEFAULT_MIN) + PWM_DEFAULT_MIN;
+                 (1500 - PWM_DEFAULT_MIN) + PWM_DEFAULT_MIN;
 
 		set_rear_motor_state(VALUE, rear_value);
 
-		_thrust_transition = _mc_virtual_att_sp->thrust;
+        // P2阶段使用固定翼油门
+        _thrust_transition = _fw_virtual_att_sp->thrust;
 
 	} else if (_vtol_schedule.flight_mode == TRANSITION_BACK) {
 		if (_rear_motors != IDLE) {
@@ -351,16 +347,24 @@ void Tiltrotor::update_transition_state()
 			flag_idle_mc = true;
 		}
 
+        // 设置mc权重
+        _mc_roll_weight = 0.0f;
+        _mc_pitch_weight = 0.0f;
+        _mc_yaw_weight = 0.0f;
+
 		// tilt rotors back
+        /*
 		if (_tilt_control > _params_tiltrotor.tilt_mc) {
 			_tilt_control = _params_tiltrotor.tilt_fw -
 					fabsf(_params_tiltrotor.tilt_fw - _params_tiltrotor.tilt_mc) * time_since_trans_start / _params->back_trans_duration;
 		}
+        */
+        // 直接控制倾转机构倾转
+        _tilt_control = _params_tiltrotor.tilt_mc;
 
 		// set zero throttle for backtransition otherwise unwanted moments will be created
+        // 转换阶段旋翼油门给0 防止意外力矩产生
 		_actuators_mc_in->control[actuator_controls_s::INDEX_THROTTLE] = 0.0f;
-
-		_mc_roll_weight = 0.0f;
 
 	}
 
@@ -390,6 +394,7 @@ void Tiltrotor::fill_actuator_outputs()
 	_actuators_out_0->control[actuator_controls_s::INDEX_YAW] = _actuators_mc_in->control[actuator_controls_s::INDEX_YAW] *
 			_mc_yaw_weight;
 
+    // 油门设置 只有fw和P2使用固定翼油门  其余使用旋翼油门
 	if (_vtol_schedule.flight_mode == FW_MODE) {
 		_actuators_out_0->control[actuator_controls_s::INDEX_THROTTLE] =
 			_actuators_fw_in->control[actuator_controls_s::INDEX_THROTTLE];
@@ -401,8 +406,18 @@ void Tiltrotor::fill_actuator_outputs()
 		}
 
 	} else {
-		_actuators_out_0->control[actuator_controls_s::INDEX_THROTTLE] =
-			_actuators_mc_in->control[actuator_controls_s::INDEX_THROTTLE];
+
+        // P2阶段用固定翼油门
+        if (_vtol_schedule.flight_mode == TRANSITION_FRONT_P2)
+        {
+            _actuators_out_0->control[actuator_controls_s::INDEX_THROTTLE] =
+                _actuators_fw_in->control[actuator_controls_s::INDEX_THROTTLE];
+        }
+        else
+        {
+            _actuators_out_0->control[actuator_controls_s::INDEX_THROTTLE] =
+                _actuators_mc_in->control[actuator_controls_s::INDEX_THROTTLE];
+        }
 	}
 
 	_actuators_out_1->timestamp = _actuators_fw_in->timestamp;
