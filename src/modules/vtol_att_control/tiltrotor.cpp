@@ -158,7 +158,7 @@ void Tiltrotor::update_vtol_state()
 		case TRANSITION_BACK:
             // 如果时间到达后向转换时间 进入MC模式
             float time_since_trans_start = (float)(hrt_absolute_time() - _vtol_schedule.transition_start) * 1e-6f;
-            if (time_since_trans_start >= _params->back_trans_duration)
+            if (time_since_trans_start >= 3.0f)
             {
 				_vtol_schedule.flight_mode = MC_MODE;
 			}
@@ -180,15 +180,19 @@ void Tiltrotor::update_vtol_state()
 
 		case TRANSITION_FRONT_P1: {
 				// allow switch if we are not armed for the sake of bench testing
-				bool transition_to_p2 = can_transition_on_ground();
+                //bool transition_to_p2 = can_transition_on_ground();
+                bool transition_to_p2 = false;
 
 				float time_since_trans_start = (float)(hrt_absolute_time() - _vtol_schedule.transition_start) * 1e-6f;
 
 				// check if we have reached airspeed to switch to fw mode
                 // P2进入条件为 时间达到最小P1时间 或 速度达到转换空速（10m/s）
-				transition_to_p2 |= !_params->airspeed_disabled &&
-                            _airspeed->indicated_airspeed_m_s >= _params->transition_airspeed ||
+                /*
+                transition_to_p2 |= _airspeed->indicated_airspeed_m_s >= _params->transition_airspeed ||
 						    time_since_trans_start > _params->front_trans_time_min;
+                */
+
+                transition_to_p2 |= time_since_trans_start > _params->front_trans_time_min;
 
 				if (transition_to_p2) {
 					_vtol_schedule.flight_mode = TRANSITION_FRONT_P2;
@@ -202,7 +206,7 @@ void Tiltrotor::update_vtol_state()
 
 			// if the rotors have been tilted completely we switch to fw mode
 			if (_tilt_control >= _params_tiltrotor.tilt_fw) {
-				_vtol_schedule.flight_mode = FW_MODE;
+                _vtol_schedule.flight_mode = FW_MODE;
 				_tilt_control = _params_tiltrotor.tilt_fw;
 			}
 
@@ -306,11 +310,13 @@ void Tiltrotor::update_transition_state()
 		}
 
         // 速度大于混合空速时开始降旋翼权重
+        /*
 		if (!_params->airspeed_disabled && _airspeed->indicated_airspeed_m_s >= _params->airspeed_blend) {
 			_mc_roll_weight = 1.0f - (_airspeed->indicated_airspeed_m_s - _params->airspeed_blend) /
 					  (_params->transition_airspeed - _params->airspeed_blend);
             _mc_pitch_weight = _mc_roll_weight;
 		}
+        */
 
 		_thrust_transition = _mc_virtual_att_sp->thrust;
 
@@ -330,7 +336,7 @@ void Tiltrotor::update_transition_state()
 		// ramp down rear motors (setting MAX_PWM down scales the given output into the new range)
         // 尾电机输出最大值从1500开始下降
 		int rear_value = (1.0f - time_since_trans_start / _params_tiltrotor.front_trans_dur_p2) *
-                 (1500 - PWM_DEFAULT_MIN) + PWM_DEFAULT_MIN;
+                 (1400 - PWM_DEFAULT_MIN) + PWM_DEFAULT_MIN;
 
 		set_rear_motor_state(VALUE, rear_value);
 
@@ -349,7 +355,7 @@ void Tiltrotor::update_transition_state()
 
         // 设置mc权重
         _mc_roll_weight = 0.0f;
-        _mc_pitch_weight = 0.0f;
+        _mc_pitch_weight = 1.0f;
         _mc_yaw_weight = 0.0f;
 
 		// tilt rotors back
@@ -422,11 +428,11 @@ void Tiltrotor::fill_actuator_outputs()
 
 	_actuators_out_1->timestamp = _actuators_fw_in->timestamp;
 	_actuators_out_1->control[actuator_controls_s::INDEX_ROLL] =
-        -_actuators_fw_in->control[actuator_controls_s::INDEX_ROLL] * (1 - _mc_roll_weight);
+        -_actuators_fw_in->control[actuator_controls_s::INDEX_ROLL];
 	_actuators_out_1->control[actuator_controls_s::INDEX_PITCH] =
-        _actuators_fw_in->control[actuator_controls_s::INDEX_PITCH] * (1 - _mc_pitch_weight);
+        _actuators_fw_in->control[actuator_controls_s::INDEX_PITCH];
 	_actuators_out_1->control[actuator_controls_s::INDEX_YAW] =
-        _actuators_fw_in->control[actuator_controls_s::INDEX_YAW] * (1 - _mc_yaw_weight);	// yaw
+        _actuators_fw_in->control[actuator_controls_s::INDEX_YAW];	// yaw
 	_actuators_out_1->control[4] = _tilt_control;
 }
 

@@ -480,9 +480,10 @@ VtolAttitudeControl::parameters_update()
 	 * Minimum transition time can be maximum 90 percent of the open loop transition time,
 	 * anything else makes no sense and can potentially lead to numerical problems.
 	 */
+    /*
 	_params.front_trans_time_min = math::min(_params.front_trans_time_openloop * 0.9f,
 				       _params.front_trans_time_min);
-
+    */
 	/* weathervane */
 	param_get(_params_handles.wv_takeoff, &l);
 	_params.wv_takeoff = (l == 1);
