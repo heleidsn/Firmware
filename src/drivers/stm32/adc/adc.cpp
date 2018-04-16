@@ -162,6 +162,7 @@ private:
 	void update_system_power(hrt_abstime now);
 
 	void update_adc_report(hrt_abstime now);
+
 };
 
 ADC::ADC(uint32_t channels) :
@@ -525,6 +526,7 @@ test(void)
 		err(1, "can't open ADC device");
 	}
 
+    /*
 	for (unsigned i = 0; i < 50; i++) {
 		px4_adc_msg_t data[PX4_MAX_ADC_CHANNELS];
 		ssize_t count = read(fd, data, sizeof(data));
@@ -542,6 +544,40 @@ test(void)
 		printf("\n");
 		usleep(500000);
 	}
+    */
+
+    int adc_sub_fd = orb_subscribe(ORB_ID(adc_report));
+
+
+    px4_pollfd_struct_t fds[1] = {};
+    fds[0].fd = adc_sub_fd;
+    fds[0].events = POLLIN;
+
+    for (unsigned i = 0; i < 20; i++)
+    {
+        int ret = px4_poll(fds, 1, 1000);
+        if (ret < 0) {
+            // Poll error, sleep and try again
+            usleep(10000);
+            PX4_WARN("POLL ERROR");
+            continue;
+
+        } else if (ret == 0) {
+            // Poll timeout, do nothing
+            PX4_WARN("POLL TIMEOUT");
+            continue;
+        }
+
+        adc_report_s ctrl;
+        orb_copy(ORB_ID(adc_report), adc_sub_fd, &ctrl);
+
+
+
+        PX4_INFO("%4.4f %4.4f %4.4f %4.4f", (double)ctrl.channel_value[8], (double)ctrl.channel_value[9], (double)ctrl.channel_value[8] * 2, (double)ctrl.channel_value[8] + (double)ctrl.channel_value[9]);
+        usleep(500000);
+
+    }
+
 
 	exit(0);
 }

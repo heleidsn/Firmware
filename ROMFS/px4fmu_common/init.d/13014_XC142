@@ -22,8 +22,8 @@
 sh /etc/init.d/rc.vtol_defaults
 if [ $AUTOCNF == yes ]
 then
-    param set VT_MOT_COUNT 3
-    param set VT_FW_MOT_OFFID 3
+    param set VT_MOT_COUNT 4
+    param set VT_FW_MOT_OFFID 4
     param set VT_IDLE_PWM_MC 1080
     param set VT_TYPE 1
 
@@ -63,7 +63,7 @@ then
 fi
 
 set MIXER XC142
-set PWM_OUT 123
+set PWM_OUT 1234
 set PWM_RATE 400
 
 set MIXER_AUX XC142

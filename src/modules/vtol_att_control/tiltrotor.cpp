@@ -426,7 +426,12 @@ void Tiltrotor::fill_actuator_outputs()
         }
 	}
 
-	_actuators_out_1->timestamp = _actuators_fw_in->timestamp;
+    // 对尾电机进行控制
+    _actuators_out_0->control[actuator_controls_s::INDEX_FLAPS] = -_actuators_out_0->control[actuator_controls_s::INDEX_PITCH] +
+            (_actuators_out_0->control[actuator_controls_s::INDEX_THROTTLE]*2 - 1) * _mc_tail_throttle_weight;
+
+    // 固定翼舵面
+    _actuators_out_1->timestamp = _actuators_fw_in  ->timestamp;
 	_actuators_out_1->control[actuator_controls_s::INDEX_ROLL] =
         -_actuators_fw_in->control[actuator_controls_s::INDEX_ROLL];
 	_actuators_out_1->control[actuator_controls_s::INDEX_PITCH] =
