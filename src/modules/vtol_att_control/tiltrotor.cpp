@@ -192,6 +192,9 @@ void Tiltrotor::update_vtol_state()
 						    time_since_trans_start > _params->front_trans_time_min;
                 */
 
+                // reduce tail rotor weight while in P1 refer to tilt time or tilt angle
+                _mc_tail_throttle_weight = 1 - time_since_trans_start/_params->front_trans_time_min;
+
                 transition_to_p2 |= time_since_trans_start > _params->front_trans_time_min;
 
 				if (transition_to_p2) {
