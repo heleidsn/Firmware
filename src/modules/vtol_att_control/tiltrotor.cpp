@@ -161,6 +161,7 @@ void Tiltrotor::update_vtol_state()
             if (time_since_trans_start >= 3.0f)
             {
 				_vtol_schedule.flight_mode = MC_MODE;
+                _mc_tail_throttle_weight = 1;
 			}
 
 			break;
@@ -339,7 +340,7 @@ void Tiltrotor::update_transition_state()
 		// ramp down rear motors (setting MAX_PWM down scales the given output into the new range)
         // 尾电机输出最大值从1500开始下降
 		int rear_value = (1.0f - time_since_trans_start / _params_tiltrotor.front_trans_dur_p2) *
-                 (1400 - PWM_DEFAULT_MIN) + PWM_DEFAULT_MIN;
+                 (1500 - PWM_DEFAULT_MIN) + PWM_DEFAULT_MIN;
 
 		set_rear_motor_state(VALUE, rear_value);
 
@@ -414,6 +415,7 @@ void Tiltrotor::fill_actuator_outputs()
 				_actuators_fw_in->control[actuator_controls_s::INDEX_YAW] * _params_tiltrotor.diff_thrust_scale;
 		}
 
+
 	} else {
 
         // P2阶段用固定翼油门
@@ -431,7 +433,7 @@ void Tiltrotor::fill_actuator_outputs()
 
     // 对尾电机进行控制
     _actuators_out_0->control[actuator_controls_s::INDEX_FLAPS] = -_actuators_out_0->control[actuator_controls_s::INDEX_PITCH] +
-            (_actuators_out_0->control[actuator_controls_s::INDEX_THROTTLE]*2 - 1) * _mc_tail_throttle_weight;
+            (_actuators_out_0->control[actuator_controls_s::INDEX_THROTTLE]*2 - 1) *  _mc_tail_throttle_weight;
 
     // 固定翼舵面
     _actuators_out_1->timestamp = _actuators_fw_in  ->timestamp;
